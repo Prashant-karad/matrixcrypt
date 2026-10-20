@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MatrixCrypt</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f8cff'/%3E%3Cpath d='M9 8H7v16h2M23 8h2v16h-2' stroke='white' stroke-width='2.4' fill='none'/%3E%3Ccircle cx='13' cy='13' r='2' fill='white'/%3E%3Ccircle cx='19' cy='13' r='2' fill='white'/%3E%3Ccircle cx='13' cy='19' r='2' fill='white'/%3E%3Ccircle cx='19' cy='19' r='2' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div>
+      <h1>MatrixCrypt</h1>
+      <p>Image encryption with multithreaded matrix multiplication &middot; DAA mini project</p>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chipCores">CPU cores: &ndash;</span>
+    <span class="chip" id="chipSize">Matrix: &ndash;</span>
+    <span class="chip" id="chipJava">Java &ndash;</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab-btn active" data-tab="lab" role="tab">Encrypt &amp; Decrypt</button>
+  <button class="tab-btn" data-tab="filter" role="tab">Photo Filter Studio</button>
+  <button class="tab-btn" data-tab="race" role="tab">Thread Race</button>
+  <button class="tab-btn" data-tab="bench" role="tab">Benchmark</button>
+  <button class="tab-btn" data-tab="how" role="tab">How it works</button>
+</nav>
+
+<main>
+
+<!-- ============================================================ LAB -->
+<section class="tab active" id="tab-lab">
+
+  <div class="toolbar">
+    <div class="group">
+      <label class="btn ghost file-btn">Upload image
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </label>
+      <button class="btn ghost" id="btnSample">Sample image</button>
+      <label class="field">Size
+        <select id="sizeSel">
+          <option value="128">128 × 128</option>
+          <option value="256">256 × 256</option>
+          <option value="512" selected>512 × 512</option>
+          <option value="1024">1024 × 1024</option>
+        </select>
+      </label>
+    </div>
+    <div class="group">
+      <label class="field">Key seed
+        <input id="seedInput" type="number" value="2026" title="The seed is the password: the same seed always makes the same key matrix K">
+      </label>
+      <label class="field">Method
+        <select id="methodSel">
+          <option value="single">Single-threaded</option>
+          <option value="row" selected>Thread per row</option>
+          <option value="cell">Thread per cell</option>
+          <option value="pool">Thread pool (bonus)</option>
+        </select>
+      </label>
+    </div>
+    <div class="group">
+      <button class="btn primary" id="btnEncrypt">Encrypt</button>
+      <button class="btn" id="btnDecrypt" disabled>Decrypt</button>
+      <button class="btn warn" id="btnWrong" disabled title="Decrypts using the seed + 1">Wrong key</button>
+    </div>
+    <div class="group">
+      <label class="switch"><input type="checkbox" id="mapToggle"><span></span>Thread map</label>
+      <label class="field">Replay
+        <input type="range" id="replaySlider" min="1" max="12" value="3">
+        <span class="mono" id="replayLabel">3 s</span>
+      </label>
+    </div>
+  </div>
+  <p class="hint" id="methodHint"></p>
+
+  <div class="statusbar">
+    <div class="progress"><div class="fill" id="labFill"></div></div>
+    <span id="labStatus">Ready</span>
+  </div>
+
+  <div class="panels">
+    <figure class="panel" id="pOriginal">
+      <figcaption><b>Original</b><code>P</code></figcaption>
+      <div class="stage"><canvas class="base"></canvas><canvas class="map"></canvas><canvas class="hl"></canvas><div class="empty"></div></div>
+      <div class="meta" id="metaOriginal">&nbsp;</div>
+    </figure>
+    <div class="arrow" aria-hidden="true"><span>× K</span></div>
+    <figure class="panel" id="pEncrypted">
+      <figcaption><b>Encrypted</b><code>C = K × P mod 256</code></figcaption>
+      <div class="stage hoverable"><canvas class="base"></canvas><canvas class="map"></canvas><canvas class="hl"></canvas><div class="empty"></div></div>
+      <div class="meta" id="metaEncrypted">&nbsp;</div>
+    </figure>
+    <div class="arrow" aria-hidden="true"><span>× K⁻¹</span></div>
+    <figure class="panel" id="pDecrypted">
+      <figcaption><b>Decrypted</b><code>P′ = K⁻¹ × C mod 256</code></figcaption>
+      <div class="stage hoverable"><canvas class="base"></canvas><canvas class="map"></canvas><canvas class="hl"></canvas><div class="empty"></div></div>
+      <div class="meta" id="metaDecrypted">&nbsp;</div>
+    </figure>
+  </div>
+
+  <div class="lower">
+    <div class="card" id="statsCard">
+      <h3>Last run</h3>
+      <div class="stats" id="stats"><p class="muted">Press <b>Encrypt</b> to run the first multiplication.</p></div>
+      <div class="legend" id="mapLegend" hidden></div>
+    </div>
+    <div class="card" id="inspector">
+      <h3>Pixel inspector</h3>
+      <div id="inspBody"><p class="muted">Hover over the encrypted or decrypted image to see the actual matrix multiplication that produced that pixel.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ FILTER STUDIO -->
+<section class="tab" id="tab-filter">
+  <div class="toolbar">
+    <div class="group">
+      <label class="field">Method
+        <select id="fMethodSel">
+          <option value="single">Single-threaded</option>
+          <option value="row" selected>Thread per row</option>
+          <option value="cell">Thread per cell (pixel)</option>
+          <option value="pool">Thread pool (bonus)</option>
+        </select>
+      </label>
+      <button class="btn primary" id="btnFilter">Apply filter</button>
+    </div>
+    <div class="group">
+      <label class="switch"><input type="checkbox" id="fLive" checked><span></span>Live preview while editing</label>
+      <label class="switch"><input type="checkbox" id="fMapToggle"><span></span>Thread map</label>
+      <label class="field">Replay
+        <input type="range" id="fReplaySlider" min="1" max="12" value="3">
+        <span class="mono" id="fReplayLabel">3 s</span>
+      </label>
+    </div>
+  </div>
+  <p class="hint">Uses the image and size chosen in the <b>Encrypt &amp; Decrypt</b> tab. Every pixel <code>[R, G, B]</code> is multiplied by the 3 × 3 filter matrix below.</p>
+
+  <div class="presets" id="presets"></div>
+
+  <div class="statusbar">
+    <div class="progress"><div class="fill" id="fFill"></div></div>
+    <span id="fStatus">Pick a filter</span>
+  </div>
+
+  <div class="filter-layout">
+    <div class="panels two">
+      <figure class="panel" id="pFOriginal">
+        <figcaption><b>Original</b><code>[R G B]</code></figcaption>
+        <div class="stage"><canvas class="base"></canvas><canvas class="map"></canvas><canvas class="hl"></canvas><div class="empty"></div></div>
+        <div class="meta">&nbsp;</div>
+      </figure>
+      <figure class="panel" id="pFiltered">
+        <figcaption><b>Filtered</b><code>F × [R G B] + o</code></figcaption>
+        <div class="stage hoverable"><canvas class="base"></canvas><canvas class="map"></canvas><canvas class="hl"></canvas><div class="empty"></div></div>
+        <div class="meta" id="metaFiltered">&nbsp;</div>
+      </figure>
+    </div>
+    <div class="side">
+      <div class="card">
+        <h3>Filter matrix <span class="muted small" id="filterName"></span></h3>
+        <div class="matrix-editor" id="matrixEditor">
+          <span class="mlabel"></span><span class="mlabel">× R</span><span class="mlabel">× G</span><span class="mlabel">× B</span><span class="mlabel">+ offset</span>
+        </div>
+        <p class="muted small" id="filterAbout"></p>
+      </div>
+      <div class="card">
+        <h3>Last run</h3>
+        <div class="stats" id="fStats"><p class="muted">Apply a filter to see timings.</p></div>
+      </div>
+      <div class="card">
+        <h3>Pixel inspector</h3>
+        <div id="fInsp"><p class="muted">Hover over the filtered image to see the matrix × vector multiplication for that pixel.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ RACE -->
+<section class="tab" id="tab-race">
+  <div class="toolbar">
+    <div class="group">
+      <button class="btn primary" id="btnRace">Start race</button>
+      <label class="switch"><input type="checkbox" id="raceCell"><span></span>Include thread per cell</label>
+      <label class="switch"><input type="checkbox" id="raceMap" checked><span></span>Thread map</label>
+      <label class="field">Replay length
+        <input type="range" id="raceSlider" min="2" max="20" value="6">
+        <span class="mono" id="raceLabel">6 s</span>
+      </label>
+    </div>
+  </div>
+  <p class="hint" id="raceHint">Encrypts the current image with every method, one after another, for real on the server. Then all lanes are replayed side by side on the <b>same time scale</b>, so their speeds can be compared fairly.</p>
+  <div class="statusbar">
+    <div class="progress"><div class="fill" id="raceFill"></div></div>
+    <span id="raceStatus">Ready</span>
+  </div>
+  <div class="lanes" id="lanes"></div>
+  <div class="card" id="raceSummary" hidden></div>
+</section>
+
+<!-- ============================================================ BENCHMARK -->
+<section class="tab" id="tab-bench">
+  <div class="toolbar">
+    <div class="group" id="benchSizes">
+      <span class="group-label">Sizes</span>
+      <label class="check"><input type="checkbox" value="64" checked>64</label>
+      <label class="check"><input type="checkbox" value="128" checked>128</label>
+      <label class="check"><input type="checkbox" value="256" checked>256</label>
+      <label class="check"><input type="checkbox" value="512" checked>512</label>
+      <label class="check"><input type="checkbox" value="1024">1024</label>
+    </div>
+    <div class="group" id="benchMethods">
+      <span class="group-label">Methods</span>
+      <label class="check"><input type="checkbox" value="single" checked><i class="dot single"></i>Single</label>
+      <label class="check"><input type="checkbox" value="row" checked><i class="dot row"></i>Per row</label>
+      <label class="check"><input type="checkbox" value="pool" checked><i class="dot pool"></i>Pool</label>
+      <label class="check"><input type="checkbox" value="cell" checked><i class="dot cell"></i>Per cell</label>
+    </div>
+    <div class="group">
+      <button class="btn primary" id="btnBench">Run benchmark</button>
+      <button class="btn ghost" id="btnCsv" disabled>Download CSV</button>
+    </div>
+  </div>
+  <p class="hint">Multiplies two random n × n matrices (mod 256). Each result is the median of several runs after a JIT warm-up, and every method's output is checked against the others. Thread per cell is skipped above 512 because it would need over a million threads. Thread per cell at 512 can take a minute.</p>
+  <div class="statusbar">
+    <div class="progress indeterminate" id="benchProg"><div class="fill"></div></div>
+    <span id="benchStatus">Ready</span>
+  </div>
+  <div class="bench-grid">
+    <div class="card chart-card">
+      <div class="card-head">
+        <h3>Time vs matrix size</h3>
+        <label class="switch small"><input type="checkbox" id="logToggle" checked><span></span>Log scale</label>
+      </div>
+      <div id="chart"><p class="muted">Results will appear here.</p></div>
+    </div>
+    <div class="card">
+      <h3>Results</h3>
+      <div id="benchTable"><p class="muted">No results yet.</p></div>
+    </div>
+    <div class="card wide">
+      <h3>Observations</h3>
+      <div id="observations"><p class="muted">Written automatically from your measured results.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ HOW -->
+<section class="tab" id="tab-how">
+  <div class="how">
+    <article class="card prose">
+      <h2>1. An image is three matrices</h2>
+      <p>An <i>n × n</i> colour image is stored as three <i>n × n</i> matrices: one each for Red, Green and Blue, with values from 0 to 255. Call them <b>P</b>.</p>
+
+      <h2>2. Encryption is a matrix multiplication</h2>
+      <div class="formula">C = K × P &nbsp;(mod 256)</div>
+      <div class="formula small">C[i][j] = ( Σ<sub>k=0..n−1</sub> K[i][k] · P[k][j] ) mod 256</div>
+      <p><b>K</b> is a random <i>n × n</i> key matrix. Every encrypted pixel depends on a whole column of the original image, so the result looks like random noise. Decryption multiplies by the inverse key:</p>
+      <div class="formula">P = K⁻¹ × C &nbsp;(mod 256)</div>
+
+      <h2>3. Making a key that can be inverted</h2>
+      <p>A matrix has an inverse mod 256 only if its determinant is <b>odd</b>. We build <b>K = L × U</b>, where <b>L</b> is lower-triangular with 1s on the diagonal and <b>U</b> is upper-triangular with random odd numbers on the diagonal. Then det(K) = det(L) · det(U) = 1 · (product of odd numbers), which is always odd.</p>
+      <p>Triangular matrices are easy to invert by substitution, and <b>K⁻¹ = U⁻¹ × L⁻¹</b>. The seed you type decides the random numbers, so the seed works like a password.</p>
+
+      <h2>4. Four ways to split the work</h2>
+      <table class="tbl">
+        <thead><tr><th>Method</th><th>Threads created</th><th>Work per thread</th><th>Idea</th></tr></thead>
+        <tbody>
+          <tr><td><i class="dot single"></i>Single-threaded</td><td>1</td><td>n³</td><td>Baseline: three nested loops.</td></tr>
+          <tr><td><i class="dot row"></i>Thread per row</td><td>n</td><td>n²</td><td>Thread <i>i</i> computes row <i>i</i> of C.</td></tr>
+          <tr><td><i class="dot cell"></i>Thread per cell</td><td>n²</td><td>n</td><td>One thread for every C[i][j].</td></tr>
+          <tr><td><i class="dot pool"></i>Thread pool</td><td>p (CPU cores)</td><td>≈ n³ / p</td><td>A few reusable workers take rows one at a time.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>5. Complexity</h2>
+      <p>Every method does the same total work: <b>n³</b> multiply-adds per channel, so <b>O(n³)</b>. Threads don't reduce the work; they share it across cores. With <i>p</i> cores the best possible time is about <b>T(n) ≈ n³ / p + overhead</b>.</p>
+      <ul>
+        <li><b>Thread creation cost</b>: starting a thread takes tens of microseconds. Thread per cell starts <i>n²</i> threads but gives each one only <i>n</i> multiplications, so the overhead is far bigger than the useful work.</li>
+        <li><b>More threads than cores</b> don't run at the same time. The operating system has to switch between them, which adds more overhead.</li>
+        <li><b>Thread per row</b> only pays off when each row has enough work (large <i>n</i>) and there are several cores.</li>
+        <li><b>A thread pool</b> creates only <i>p</i> threads and reuses them, which is how real software (and Java's parallel streams) does it.</li>
+      </ul>
+
+      <h2>6. Limitation (good to mention in the viva)</h2>
+      <p>This is a Hill-cipher-style cipher and it is <b>linear</b>: if an attacker knows one original image and its encrypted version, they can solve for K. Also, two identical columns in P give identical columns in C. Real systems use AES. This project is about the algorithm and its performance, not production security.</p>
+    </article>
+
+    <aside class="card prose">
+      <h2>Viva questions</h2>
+      <details open><summary>Why is thread per cell the slowest?</summary><p>It creates n² threads (262,144 for 512 × 512). Creating and scheduling a thread costs far more time than the n multiplications each thread does.</p></details>
+      <details><summary>What is the time complexity?</summary><p>O(n³) for every method. Parallelism divides the running time by at most the number of cores; it doesn't change the total work.</p></details>
+      <details><summary>Why transpose P before multiplying?</summary><p>So column j of P becomes a contiguous array in memory. The dot product then reads memory in order, which uses the CPU cache well. All methods use it, so the comparison stays fair.</p></details>
+      <details><summary>Why mod 256?</summary><p>Pixel values must stay between 0 and 255. Working mod 256 keeps every result a valid pixel and lets the inverse key recover the image exactly.</p></details>
+      <details><summary>Why must the determinant be odd?</summary><p>A matrix is invertible mod m only if its determinant has an inverse mod m. Mod 256 = 2⁸, only odd numbers have inverses.</p></details>
+      <details><summary>Why can speed-up not exceed the core count?</summary><p>Only p threads can run at the same instant on p cores. With 2 cores the best case is 2× faster; overhead usually makes it a bit less.</p></details>
+      <details><summary>Why is the first run slower?</summary><p>Java's JIT compiler optimises code after it has run a few times. The benchmark warms up first and reports the median of several runs.</p></details>
+      <details><summary>Could we use Strassen's algorithm?</summary><p>Yes: Strassen is O(n<sup>2.81</sup>) and is a good extension. It's worthwhile only for large matrices because of its extra additions.</p></details>
+    </aside>
+  </div>
+</section>
+
+</main>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
